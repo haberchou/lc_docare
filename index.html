@@ -51,13 +51,7 @@
                 <div>
                     <label class="block text-xs font-bold text-slate-400 mb-1">類別過濾</label>
                     <select id="filter-category" onchange="renderAll()" class="w-full border p-2 rounded-lg">
-                        <option value="All">全部類別</option>
-                        <option value="收入">收入</option>
-                        <option value="人事">人事</option>
-                        <option value="租金">租金</option>
-                        <option value="行銷">行銷</option>
-                        <option value="雜項">雜項</option>
-                    </select>
+                     </select>
                 </div>
                 <div class="md:col-span-2 grid grid-cols-2 gap-2">
                     <button onclick="document.getElementById('modal').classList.remove('hidden')" class="bg-blue-600 text-white font-bold py-2 rounded-lg hover:bg-blue-700 transition">+ 新增帳目</button>
@@ -88,8 +82,6 @@
             <div class="space-y-4">
                 <input type="date" id="new-date" class="w-full border p-3 rounded-xl">
                 <input type="text" id="new-desc" placeholder="項目描述 (如: 1月辦公室租金)" class="w-full border p-3 rounded-xl">
-                <select id="filter-category" onchange="renderAll()" class="w-full border p-2 rounded-lg">
-                </select>
                 <select id="new-cat" class="w-full border p-3 rounded-xl">
                 </select>
                 
@@ -180,5 +172,6 @@ window.onload = fetchRecords;
 </body>
 
 </html>
+
 
 
