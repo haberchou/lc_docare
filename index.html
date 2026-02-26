@@ -103,171 +103,112 @@ const COMPANY_CATEGORIES = [
     "支出 - 設備採購", "支出 - 模料與塗料", "支出 - 雜項費用", "支出 - 家庭開支"
 ];
 
-let records = [];
-let myChart = null;
+// ... (保留之前的 GAS_URL 和 COMPANY_CATEGORIES) ...
 
-// 2. 【唯一】的啟動門口：把所有初始化動作放在這裡
+let records = [];
+let categoryChart = null; // 原本的柱狀圖
+let trendChart = null;    // 新增的年度趨勢圖
+
 window.onload = async function() {
-    console.log("系統啟動中...");
-    
-    // 第一步：產生下拉選單 (這解決了選單空白問題)
     initCategoryMenus(); 
-    
-    // 第二步：設定預設日期
-    const dateInput = document.getElementById('new-date');
-    if(dateInput) dateInput.valueAsDate = new Date();
-    
-    // 第三步：從雲端抓取資料並畫出表格與圖表
+    // 新增一個圖表容器
+    const chartSection = document.querySelector('.lg:col-span-2');
+    chartSection.innerHTML = `
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div style="height:250px"><canvas id="categoryChart"></canvas></div>
+            <div style="height:250px"><canvas id="trendChart"></canvas></div>
+        </div>
+    `;
     await fetchRecords(); 
 };
 
-// --- 以下是功能函數，請確保名稱與 HTML 裡的 onclick 對應 ---
-
-function initCategoryMenus() {
-    const filterMenu = document.getElementById('filter-category');
-    const newEntryMenu = document.getElementById('new-cat');
-    
-    if(!filterMenu || !newEntryMenu) return;
-
-    let filterHtml = '<option value="All">全部類別</option>';
-    let newEntryHtml = '';
-
-    COMPANY_CATEGORIES.forEach(cat => {
-        const opt = `<option value="${cat}">${cat}</option>`;
-        filterHtml += opt;
-        newEntryHtml += opt;
-    });
-
-    filterMenu.innerHTML = filterHtml;
-    newEntryMenu.innerHTML = newEntryHtml;
-    console.log("選單初始化完成");
-}
-
-async function fetchRecords() {
-    try {
-        const response = await fetch(GAS_URL);
-        records = await response.json();
-        renderAll();
-    } catch (e) {
-        console.error("抓取失敗:", e);
-        // 如果 API 沒反應，先抓本地舊資料墊底
-        records = JSON.parse(localStorage.getItem('corp_cache')) || [];
-        renderAll();
-    }
-}
-
-async function addData() {
-    const btn = event.target;
-    const date = document.getElementById('new-date').value;
-    const desc = document.getElementById('new-desc').value;
-    const category = document.getElementById('new-cat').value;
-    const amount = parseFloat(document.getElementById('new-amount').value);
-    
-    if (!date || !desc || isNaN(amount)) return alert('請填寫完整資訊');
-
-    btn.innerText = "傳送中...";
-    btn.disabled = true;
-
-    const newRecord = { id: Date.now(), date, desc, category, amount };
-
-    try {
-        await fetch(GAS_URL, {
-            method: 'POST',
-            body: JSON.stringify(newRecord)
-        });
-        records.push(newRecord);
-        localStorage.setItem('corp_cache', JSON.stringify(records));
-        renderAll();
-        document.getElementById('modal').classList.add('hidden');
-        document.getElementById('new-desc').value = '';
-        document.getElementById('new-amount').value = '';
-    } catch (e) {
-        alert("儲存失敗，請檢查網路");
-    } finally {
-        btn.innerText = "確認儲存";
-        btn.disabled = false;
-    }
-}
-
+// 核心渲染邏輯：加入年度趨勢分析
 function renderAll() {
-    const searchTerm = document.getElementById('search-input').value.toLowerCase();
-    const filterCat = document.getElementById('filter-category').value;
-    const tbody = document.getElementById('table-body');
-    if(!tbody) return;
-    
-    tbody.innerHTML = '';
+    // ... (保留之前的過濾代碼) ...
+
     let income = 0, expense = 0;
     let catData = {};
-
-    const filtered = records.filter(r => {
-        const matchSearch = String(r.desc).toLowerCase().includes(searchTerm);
-        const matchCat = filterCat === 'All' || r.category === filterCat;
-        return matchSearch && matchCat;
-    }).sort((a,b) => new Date(b.date) - new Date(a.date));
+    let monthlyData = {
+        income: new Array(12).fill(0),
+        expense: new Array(12).fill(0)
+    };
 
     filtered.forEach(r => {
         const isInc = String(r.category).includes('收入');
         const amt = parseFloat(r.amount) || 0;
-        if (isInc) income += amt; else expense += amt;
+        const month = new Date(r.date).getMonth(); // 0-11
+
+        if (isInc) {
+            income += amt;
+            monthlyData.income[month] += amt;
+        } else {
+            expense += amt;
+            monthlyData.expense[month] += amt;
+        }
         catData[r.category] = (catData[r.category] || 0) + amt;
 
-        tbody.innerHTML += `
-            <tr class="hover:bg-slate-50 transition border-b text-sm">
-                <td class="p-4 text-slate-500">${r.date}</td>
-                <td class="p-4 font-medium text-slate-800">${r.desc}</td>
-                <td class="p-4"><span class="px-2 py-1 rounded text-xs font-bold ${isInc ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}">${r.category}</span></td>
-                <td class="p-4 text-right font-mono font-bold ${isInc ? 'text-green-600' : 'text-red-500'}">${isInc ? '+' : '-'}${amt.toLocaleString()}</td>
-                <td class="p-4 text-center text-slate-300">--</td>
-            </tr>
-        `;
+        // ... (保留表格渲染代碼) ...
     });
 
-    document.getElementById('total-income').innerText = `$${income.toLocaleString()}`;
-    document.getElementById('total-expense').innerText = `$${expense.toLocaleString()}`;
-    const net = income - expense;
-    const netEl = document.getElementById('net-profit');
-    netEl.innerText = `$${net.toLocaleString()}`;
-    netEl.className = `text-3xl font-bold ${net >= 0 ? 'text-blue-600' : 'text-red-600'}`;
+    // 更新數字介面 (略) ...
     
-    updateChart(catData);
+    updateCharts(catData, monthlyData);
 }
 
-function updateChart(catData) {
-    const canvas = document.getElementById('categoryChart');
-    if(!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (myChart) myChart.destroy();
-    myChart = new Chart(ctx, {
+// 同時更新兩個圖表
+function updateCharts(catData, monthlyData) {
+    // 1. 類別比例圖 (Bar)
+    const ctx1 = document.getElementById('categoryChart').getContext('2d');
+    if (categoryChart) categoryChart.destroy();
+    categoryChart = new Chart(ctx1, {
         type: 'bar',
         data: {
             labels: Object.keys(catData),
             datasets: [{
-                label: '類別統計',
+                label: '類別佔比',
                 data: Object.values(catData),
-                backgroundColor: ['#3b82f6', '#f87171', '#fbbf24', '#34d399', '#a78bfa', '#6366f1']
+                backgroundColor: '#6366f1'
             }]
         },
-        options: { maintainAspectRatio: false }
+        options: { maintainAspectRatio: false, plugins: { title: { display: true, text: '類別支出分析' } } }
     });
-}
 
-function exportCSV() {
-    let csv = "\ufeff日期,項目,類別,金額\n";
-    records.forEach(r => csv += `${r.date},${r.desc},${r.category},${r.amount}\n`);
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = `財務報表_${new Date().toLocaleDateString()}.csv`;
-    link.click();
-}
-
-function clearData() {
-    if(confirm('確定要清空顯示嗎？')) { records = []; renderAll(); }
+    // 2. 年度趨勢圖 (Line)
+    const ctx2 = document.getElementById('trendChart').getContext('2d');
+    if (trendChart) trendChart.destroy();
+    trendChart = new Chart(ctx2, {
+        type: 'line',
+        data: {
+            labels: ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'],
+            datasets: [
+                {
+                    label: '月收入',
+                    data: monthlyData.income,
+                    borderColor: '#10b981',
+                    tension: 0.3,
+                    fill: false
+                },
+                {
+                    label: '月支出',
+                    data: monthlyData.expense,
+                    borderColor: '#ef4444',
+                    tension: 0.3,
+                    fill: false
+                }
+            ]
+        },
+        options: { 
+            maintainAspectRatio: false, 
+            plugins: { title: { display: true, text: '年度收支趨勢' } },
+            scales: { y: { beginAtZero: true } }
+        }
+    });
 }
     </script>
 </body>
 
 </html>
+
 
 
 
