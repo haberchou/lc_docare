@@ -110,16 +110,9 @@ let categoryChart = null; // 原本的柱狀圖
 let trendChart = null;    // 新增的年度趨勢圖
 
 window.onload = async function() {
-    initCategoryMenus(); 
-    // 新增一個圖表容器
-    const chartSection = document.querySelector('.lg:col-span-2');
-    chartSection.innerHTML = `
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div style="height:250px"><canvas id="categoryChart"></canvas></div>
-            <div style="height:250px"><canvas id="trendChart"></canvas></div>
-        </div>
-    `;
-    await fetchRecords(); 
+    initCategoryMenus(); // 這行沒執行，選單就不會出來！
+    document.getElementById('new-date').valueAsDate = new Date();
+    await fetchRecords();  
 };
 
 // 核心渲染邏輯：加入年度趨勢分析
@@ -208,6 +201,7 @@ function updateCharts(catData, monthlyData) {
 </body>
 
 </html>
+
 
 
 
