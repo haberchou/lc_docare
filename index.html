@@ -88,13 +88,11 @@
             <div class="space-y-4">
                 <input type="date" id="new-date" class="w-full border p-3 rounded-xl">
                 <input type="text" id="new-desc" placeholder="項目描述 (如: 1月辦公室租金)" class="w-full border p-3 rounded-xl">
-                <select id="new-cat" class="w-full border p-3 rounded-xl">
-                    <option value="收入">收入 - 業務銷售</option>
-                    <option value="人事">支出 - 人事費用</option>
-                    <option value="租金">支出 - 租金水電</option>
-                    <option value="行銷">支出 - 廣告行銷</option>
-                    <option value="雜項">支出 - 雜項</option>
+                <select id="filter-category" onchange="renderAll()" class="w-full border p-2 rounded-lg">
                 </select>
+                <select id="new-cat" class="w-full border p-3 rounded-xl">
+                </select>
+                
                 <input type="number" id="new-amount" placeholder="金額" class="w-full border p-3 rounded-xl">
                 <div class="flex gap-2 pt-2">
                     <button onclick="document.getElementById('modal').classList.add('hidden')" class="flex-1 py-3 bg-gray-100 rounded-xl">取消</button>
@@ -105,6 +103,43 @@
     </div>
 
     <script>
+        // 【客製化調整】在這裡新增或修改你的公司類別
+const COMPANY_CATEGORIES = [
+    "收入 - 業務銷售",
+    "收入 - 投資理財",
+    "支出 - 人事費用",
+    "支出 - 租金水電",
+    "支出 - 廣告行銷",
+    "支出 - 設備採購",
+    "支出 - 雜項費用"
+];
+
+// 初始化下拉選單的函式
+function initCategoryMenus() {
+    const filterMenu = document.getElementById('filter-category');
+    const newEntryMenu = document.getElementById('new-cat');
+
+    // 設定搜尋過濾選單 (保留「全部」選項)
+    let filterHtml = '<option value="All">全部類別</option>';
+    // 設定新增資料選單
+    let newEntryHtml = '';
+
+    COMPANY_CATEGORIES.forEach(cat => {
+        // 為了方便過濾，我們統一取大類別名稱（例如「收入」或「支出」）
+        // 或是直接用全名也可以，這裡示範用全名
+        filterHtml += `<option value="${cat}">${cat}</option>`;
+        newEntryHtml += `<option value="${cat}">${cat}</option>`;
+    });
+
+    filterMenu.innerHTML = filterHtml;
+    newEntryMenu.innerHTML = newEntryHtml;
+}
+
+// 修改 window.onload 確保載入時會執行初始化
+window.onload = function() {
+    initCategoryMenus(); // 初始化選單
+    fetchRecords();      // 讀取原本的資料
+};
 const GAS_URL = "https://script.google.com/macros/s/AKfycbwKhUq-W1M6Pr_xKlazUBXyinoolxJCldcex0vqp51XgkIkK6px1t_h9vqqg5khEXPNZw/exec"; // 貼上剛才複製的 URL
 
 // 1. 初始化讀取資料 (從 GAS 讀取，而不是 localStorage)
@@ -142,3 +177,4 @@ window.onload = fetchRecords;
 </body>
 
 </html>
+
