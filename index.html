@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>企業財務管理系統 Pro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: 'Inter', 'Microsoft JhengHei', sans-serif; }
+        .chart-container { position: relative; height:300px; width:100% }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen pb-12">
+    <div class="max-w-6xl mx-auto p-4 md:p-8">
+        <div class="flex justify-between items-center mb-8">
+            <h1 class="text-3xl font-extrabold text-slate-800">📊 財務決策儀表板</h1>
+            <div class="space-x-2">
+                <button onclick="exportCSV()" class="bg-white border px-4 py-2 rounded shadow-sm hover:bg-gray-50 text-sm">導出 CSV</button>
+                <button onclick="clearData()" class="bg-red-50 text-red-600 px-4 py-2 rounded text-sm hover:bg-red-100">清空資料</button>
+            </div>
+        </div>
+        
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+            <div class="lg:col-span-1 space-y-4">
+                <div class="p-6 bg-white rounded-xl shadow-sm border border-slate-200">
+                    <p class="text-slate-500 text-sm font-medium">本月淨利預估</p>
+                    <p id="net-profit" class="text-3xl font-bold text-blue-600">$0</p>
+                </div>
+                <div class="p-6 bg-white rounded-xl shadow-sm border border-slate-200">
+                    <div class="flex justify-between mb-2">
+                        <span class="text-green-600 font-bold text-sm">收入: <span id="total-income">$0</span></span>
+                        <span class="text-red-500 font-bold text-sm">支出: <span id="total-expense">$0</span></span>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-2">
+                        <div id="profit-bar" class="bg-blue-500 h-2 rounded-full" style="width: 50%"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="lg:col-span-2 p-6 bg-white rounded-xl shadow-sm border border-slate-200 chart-container">
+                <canvas id="categoryChart"></canvas>
+            </div>
+        </div>
+
+        <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 mb-8">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 mb-1">搜尋描述</label>
+                    <input type="text" id="search-input" oninput="renderAll()" placeholder="輸入關鍵字..." class="w-full border p-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 mb-1">類別過濾</label>
+                    <select id="filter-category" onchange="renderAll()" class="w-full border p-2 rounded-lg">
+                        <option value="All">全部類別</option>
+                        <option value="收入">收入</option>
+                        <option value="人事">人事</option>
+                        <option value="租金">租金</option>
+                        <option value="行銷">行銷</option>
+                        <option value="雜項">雜項</option>
+                    </select>
+                </div>
+                <div class="md:col-span-2 grid grid-cols-2 gap-2">
+                    <button onclick="document.getElementById('modal').classList.remove('hidden')" class="bg-blue-600 text-white font-bold py-2 rounded-lg hover:bg-blue-700 transition">+ 新增帳目</button>
+                    <p class="text-xs text-slate-400 self-center text-right">自動儲存於瀏覽器</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+            <table class="w-full text-left">
+                <thead class="bg-slate-50 border-b border-slate-200">
+                    <tr>
+                        <th class="p-4 text-sm font-semibold text-slate-600">日期</th>
+                        <th class="p-4 text-sm font-semibold text-slate-600">項目</th>
+                        <th class="p-4 text-sm font-semibold text-slate-600">類別</th>
+                        <th class="p-4 text-sm font-semibold text-slate-600 text-right">金額</th>
+                        <th class="p-4 text-sm font-semibold text-slate-600 text-center">操作</th>
+                    </tr>
+                </thead>
+                <tbody id="table-body" class="divide-y divide-slate-100"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div id="modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl p-6 w-full max-w-md">
+            <h3 class="text-xl font-bold mb-4">新增帳務紀錄</h3>
+            <div class="space-y-4">
+                <input type="date" id="new-date" class="w-full border p-3 rounded-xl">
+                <input type="text" id="new-desc" placeholder="項目描述 (如: 1月辦公室租金)" class="w-full border p-3 rounded-xl">
+                <select id="new-cat" class="w-full border p-3 rounded-xl">
+                    <option value="收入">收入 - 業務銷售</option>
+                    <option value="人事">支出 - 人事費用</option>
+                    <option value="租金">支出 - 租金水電</option>
+                    <option value="行銷">支出 - 廣告行銷</option>
+                    <option value="雜項">支出 - 雜項</option>
+                </select>
+                <input type="number" id="new-amount" placeholder="金額" class="w-full border p-3 rounded-xl">
+                <div class="flex gap-2 pt-2">
+                    <button onclick="document.getElementById('modal').classList.add('hidden')" class="flex-1 py-3 bg-gray-100 rounded-xl">取消</button>
+                    <button onclick="addData()" class="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold">確認儲存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let records = JSON.parse(localStorage.getItem('corp_ledger_pro')) || [];
+        let myChart = null;
+
+        function addData() {
+            const date = document.getElementById('new-date').value;
+            const desc = document.getElementById('new-desc').value;
+            const category = document.getElementById('new-cat').value;
+            const amount = parseFloat(document.getElementById('new-amount').value);
+            if (!date || !desc || isNaN(amount)) return alert('請填寫完整資訊');
+            records.push({ id: Date.now(), date, desc, category, amount });
+            saveAndRender();
+            document.getElementById('modal').classList.add('hidden');
+        }
+
+        function deleteData(id) {
+            if(confirm('確定刪除此筆記錄？')) {
+                records = records.filter(r => r.id !== id);
+                saveAndRender();
+            }
+        }
+
+        function saveAndRender() {
+            localStorage.setItem('corp_ledger_pro', JSON.stringify(records));
+            renderAll();
+        }
+
+        function renderAll() {
+            const searchTerm = document.getElementById('search-input').value.toLowerCase();
+            const filterCat = document.getElementById('filter-category').value;
+            const tbody = document.getElementById('table-body');
+            tbody.innerHTML = '';
+            
+            let income = 0, expense = 0;
+            let catData = {};
+
+            const filtered = records.filter(r => {
+                const matchSearch = r.desc.toLowerCase().includes(searchTerm);
+                const matchCat = filterCat === 'All' || r.category === filterCat;
+                return matchSearch && matchCat;
+            }).sort((a,b) => new Date(b.date) - new Date(a.date));
+
+            filtered.forEach(r => {
+                const isInc = r.category === '收入';
+                if (isInc) income += r.amount; else expense += r.amount;
+                catData[r.category] = (catData[r.category] || 0) + r.amount;
+
+                tbody.innerHTML += `
+                    <tr class="hover:bg-slate-50 transition">
+                        <td class="p-4 text-sm text-slate-500">${r.date}</td>
+                        <td class="p-4 font-medium text-slate-800">${r.desc}</td>
+                        <td class="p-4"><span class="px-2 py-1 rounded-md text-xs font-bold ${isInc ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}">${r.category}</span></td>
+                        <td class="p-4 text-right font-mono font-bold ${isInc ? 'text-green-600' : 'text-red-500'}">${isInc ? '+' : '-'}${r.amount.toLocaleString()}</td>
+                        <td class="p-4 text-center"><button onclick="deleteData(${r.id})" class="text-slate-300 hover:text-red-500 transition">✕</button></td>
+                    </tr>
+                `;
+            });
+
+            document.getElementById('total-income').innerText = `$${income.toLocaleString()}`;
+            document.getElementById('total-expense').innerText = `$${expense.toLocaleString()}`;
+            const net = income - expense;
+            document.getElementById('net-profit').innerText = `$${net.toLocaleString()}`;
+            document.getElementById('net-profit').className = `text-3xl font-bold ${net >= 0 ? 'text-blue-600' : 'text-red-600'}`;
+            
+            updateChart(catData);
+        }
+
+        function updateChart(catData) {
+            const ctx = document.getElementById('categoryChart').getContext('2d');
+            if (myChart) myChart.destroy();
+            myChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: Object.keys(catData),
+                    datasets: [{
+                        label: '各類別金額統計',
+                        data: Object.values(catData),
+                        backgroundColor: ['#3b82f6', '#f87171', '#fbbf24', '#34d399', '#a78bfa']
+                    }]
+                },
+                options: { maintainAspectRatio: false, plugins: { legend: { display: false } } }
+            });
+        }
+
+        function exportCSV() {
+            let csv = "\ufeff日期,項目,類別,金額\n";
+            records.forEach(r => csv += `${r.date},${r.desc},${r.category},${r.amount}\n`);
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = `財務報表_${new Date().toLocaleDateString()}.csv`;
+            link.click();
+        }
+
+        function clearData() { if(confirm('警告：這將刪除所有本地存儲的紀錄！')) { records = []; saveAndRender(); } }
+
+        document.getElementById('new-date').valueAsDate = new Date();
+        renderAll();
+    </script>
+</body>
+</html>
