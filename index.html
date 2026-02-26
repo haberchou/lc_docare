@@ -95,33 +95,32 @@
     </div>
 
     <script>
-        // 【客製化調整】在這裡新增或修改你的公司類別
+    // 1. 設定區
+const GAS_URL = "https://script.google.com/macros/s/AKfycbwKhUq-W1M6Pr_xKlazUBXyinoolxJCldcex0vqp51XgkIkK6px1t_h9vqqg5khEXPNZw/exec"; 
 const COMPANY_CATEGORIES = [
-    "收入 - 居家鍍膜",
-    "收入 - 汽車美容",
-    "收入 - 商務鍍膜",
-    "支出 - 人事費用",
-    "支出 - 租金水電",
-    "支出 - 廣告行銷",
-    "支出 - 設備採購",
-    "支出 - 模料與塗料",
-    "支出 - 雜項費用",
-    "支出 - 家庭開支"
+    "收入 - 居家鍍膜", "收入 - 汽車美容", "收入 - 商務鍍膜",
+    "支出 - 人事費用", "支出 - 租金水電", "支出 - 廣告行銷",
+    "支出 - 設備採購", "支出 - 模料與塗料", "支出 - 雜項費用", "支出 - 家庭開支"
 ];
 
-// 初始化下拉選單的函式
+let records = [];
+let myChart = null;
+
+// 2. 初始化：合併所有啟動邏輯
+window.onload = async function() {
+    initCategoryMenus(); // 產生下拉選單
+    document.getElementById('new-date').valueAsDate = new Date(); // 預設日期為今天
+    await fetchRecords(); // 從 Google 讀取資料
+};
+
+// 產生動態選單
 function initCategoryMenus() {
     const filterMenu = document.getElementById('filter-category');
     const newEntryMenu = document.getElementById('new-cat');
-
-    // 設定搜尋過濾選單 (保留「全部」選項)
     let filterHtml = '<option value="All">全部類別</option>';
-    // 設定新增資料選單
     let newEntryHtml = '';
 
     COMPANY_CATEGORIES.forEach(cat => {
-        // 為了方便過濾，我們統一取大類別名稱（例如「收入」或「支出」）
-        // 或是直接用全名也可以，這裡示範用全名
         filterHtml += `<option value="${cat}">${cat}</option>`;
         newEntryHtml += `<option value="${cat}">${cat}</option>`;
     });
@@ -130,22 +129,23 @@ function initCategoryMenus() {
     newEntryMenu.innerHTML = newEntryHtml;
 }
 
-// 修改 window.onload 確保載入時會執行初始化
-window.onload = function() {
-    initCategoryMenus(); // 初始化選單
-    fetchRecords();      // 讀取原本的資料
-};
-const GAS_URL = "https://script.google.com/macros/s/AKfycbwKhUq-W1M6Pr_xKlazUBXyinoolxJCldcex0vqp51XgkIkK6px1t_h9vqqg5khEXPNZw/exec"; // 貼上剛才複製的 URL
-
-// 1. 初始化讀取資料 (從 GAS 讀取，而不是 localStorage)
+// 從 Google Sheets 讀取
 async function fetchRecords() {
-    const response = await fetch(GAS_URL);
-    records = await response.json();
-    renderAll();
+    try {
+        const response = await fetch(GAS_URL);
+        records = await response.json();
+        renderAll();
+    } catch (e) {
+        console.error("讀取失敗:", e);
+        // 如果 API 沒反應，嘗試從 localStorage 救回緩存 (選配)
+        records = JSON.parse(localStorage.getItem('corp_cache')) || [];
+        renderAll();
+    }
 }
 
-// 2. 修改 addData 函數
+// 新增資料到 Google Sheets
 async function addData() {
+    const btn = event.target;
     const date = document.getElementById('new-date').value;
     const desc = document.getElementById('new-desc').value;
     const category = document.getElementById('new-cat').value;
@@ -153,25 +153,118 @@ async function addData() {
     
     if (!date || !desc || isNaN(amount)) return alert('請填寫完整資訊');
 
+    btn.innerText = "傳送中...";
+    btn.disabled = true;
+
     const newRecord = { id: Date.now(), date, desc, category, amount };
 
-    // 傳送到 Google Sheets
-    await fetch(GAS_URL, {
-        method: 'POST',
-        body: JSON.stringify(newRecord)
-    });
-
-    records.push(newRecord); // 更新本地變數
-    renderAll();
-    document.getElementById('modal').classList.add('hidden');
+    try {
+        await fetch(GAS_URL, {
+            method: 'POST',
+            body: JSON.stringify(newRecord)
+        });
+        records.push(newRecord);
+        localStorage.setItem('corp_cache', JSON.stringify(records)); // 做一個備份
+        renderAll();
+        document.getElementById('modal').classList.add('hidden');
+        document.getElementById('new-desc').value = '';
+        document.getElementById('new-amount').value = '';
+    } catch (e) {
+        alert("儲存失敗，請檢查網路連接");
+    } finally {
+        btn.innerText = "確認儲存";
+        btn.disabled = false;
+    }
 }
 
-// 頁面加載時執行
-window.onload = fetchRecords;
+// 核心渲染邏輯 (含搜尋、過濾、統計、圖表)
+function renderAll() {
+    const searchTerm = document.getElementById('search-input').value.toLowerCase();
+    const filterCat = document.getElementById('filter-category').value;
+    const tbody = document.getElementById('table-body');
+    tbody.innerHTML = '';
+    
+    let income = 0, expense = 0;
+    let catData = {};
+
+    // 過濾邏輯
+    const filtered = records.filter(r => {
+        const matchSearch = r.desc.toLowerCase().includes(searchTerm);
+        const matchCat = filterCat === 'All' || r.category === filterCat;
+        return matchSearch && matchCat;
+    }).sort((a,b) => new Date(b.date) - new Date(a.date));
+
+    // 跑循環計算數據並渲染表格
+    filtered.forEach(r => {
+        const isInc = r.category.includes('收入');
+        const amt = parseFloat(r.amount);
+        if (isInc) income += amt; else expense += amt;
+        
+        // 統計各類別總額給圖表用
+        catData[r.category] = (catData[r.category] || 0) + amt;
+
+        tbody.innerHTML += `
+            <tr class="hover:bg-slate-50 transition border-b">
+                <td class="p-4 text-sm text-slate-500">${r.date}</td>
+                <td class="p-4 font-medium text-slate-800">${r.desc}</td>
+                <td class="p-4"><span class="px-2 py-1 rounded-md text-xs font-bold ${isInc ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}">${r.category}</span></td>
+                <td class="p-4 text-right font-mono font-bold ${isInc ? 'text-green-600' : 'text-red-500'}">${isInc ? '+' : '-'}${amt.toLocaleString()}</td>
+                <td class="p-4 text-center text-slate-300">--</td>
+            </tr>
+        `;
+    });
+
+    // 更新儀表板數字
+    document.getElementById('total-income').innerText = `$${income.toLocaleString()}`;
+    document.getElementById('total-expense').innerText = `$${expense.toLocaleString()}`;
+    const net = income - expense;
+    const netEl = document.getElementById('net-profit');
+    netEl.innerText = `$${net.toLocaleString()}`;
+    netEl.className = `text-3xl font-bold ${net >= 0 ? 'text-blue-600' : 'text-red-600'}`;
+    
+    // 更新圖表
+    updateChart(catData);
+}
+
+// 更新圖表 (Bar Chart)
+function updateChart(catData) {
+    const ctx = document.getElementById('categoryChart').getContext('2d');
+    if (myChart) myChart.destroy();
+    myChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: Object.keys(catData),
+            datasets: [{
+                label: '金額统计',
+                data: Object.values(catData),
+                backgroundColor: ['#3b82f6', '#f87171', '#fbbf24', '#34d399', '#a78bfa', '#6366f1', '#ec4899']
+            }]
+        },
+        options: { 
+            maintainAspectRatio: false, 
+            plugins: { legend: { display: false } },
+            scales: { y: { beginAtZero: true } }
+        }
+    });
+}
+
+// 導出 CSV
+function exportCSV() {
+    let csv = "\ufeff日期,項目,類別,金額\n";
+    records.forEach(r => csv += `${r.date},${r.desc},${r.category},${r.amount}\n`);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `財務報表_${new Date().toLocaleDateString()}.csv`;
+    link.click();
+}
+
+function clearData() { if(confirm('這會清空網頁顯示，但不會刪除 Google Sheets 上的原始資料。確定嗎？')) { records = []; renderAll(); } }
     </script>
 </body>
 
 </html>
+
 
 
 
